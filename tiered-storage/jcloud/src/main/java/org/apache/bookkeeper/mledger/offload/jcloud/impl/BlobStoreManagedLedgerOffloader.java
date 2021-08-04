@@ -205,12 +205,15 @@ public class BlobStoreManagedLedgerOffloader implements LedgerOffloader {
                     int blockSize = BlockAwareSegmentInputStreamImpl
                         .calculateBlockSize(config.getMaxBlockSizeInBytes(), readHandle, startEntry, entryBytesWritten);
                     try (BlockAwareSegmentInputStream blockStream = new BlockAwareSegmentInputStreamImpl(
-                        readHandle, startEntry, blockSize)) {
+                        readHandle, startEntry, blockSize, mbean, extraMetadata.get(MANAGED_LEDGER_NAME))) {
 
                         Payload partPayload = Payloads.newInputStreamPayload(blockStream);
                         partPayload.getContentMetadata().setContentLength((long) blockSize);
                         partPayload.getContentMetadata().setContentType("application/octet-stream");
+                        long startUploadTime = System.nanoTime();
                         parts.add(writeBlobStore.uploadMultipartPart(mpu, partId, partPayload));
+                        mbean.recordWriteToStorageLatency(extraMetadata.get(MANAGED_LEDGER_NAME),
+                                System.nanoTime() - startUploadTime, TimeUnit.NANOSECONDS);
                         log.debug("UploadMultipartPart. container: {}, blobName: {}, partId: {}, mpu: {}",
                                 config.getBucket(), dataBlockKey, partId, mpu.id());
 
@@ -224,14 +227,19 @@ public class BlobStoreManagedLedgerOffloader implements LedgerOffloader {
                         }
                         entryBytesWritten += blockStream.getBlockEntryBytesCount();
                         partId++;
-                        mbean.recordWriteToStorageRate(extraMetadata.get(MANAGED_LEDGER_NAME), blockStream.getBlockEntryBytesCount());
+                        mbean.recordOffloadRate(extraMetadata.get(MANAGED_LEDGER_NAME),
+                                blockStream.getBlockEntryBytesCount());
                     }
 
                     dataObjectLength += blockSize;
                 }
 
+                long startUploadTime = System.nanoTime();
                 writeBlobStore.completeMultipartUpload(mpu, parts);
-                mbean.recordOffloadTime(extraMetadata.get(MANAGED_LEDGER_NAME), (System.nanoTime() - start), TimeUnit.NANOSECONDS);
+                mbean.recordWriteToStorageLatency(extraMetadata.get(MANAGED_LEDGER_NAME),
+                        System.nanoTime() - startUploadTime, TimeUnit.NANOSECONDS);
+                mbean.recordOffloadTime(extraMetadata.get(MANAGED_LEDGER_NAME),
+                        System.nanoTime() - start, TimeUnit.NANOSECONDS);
                 mpu = null;
             } catch (Throwable t) {
                 try {
@@ -248,7 +256,6 @@ public class BlobStoreManagedLedgerOffloader implements LedgerOffloader {
                 return;
             }
 
-            long startIndex = System.nanoTime();
             // upload index block
             try (OffloadIndexBlock index = indexBuilder.withDataObjectLength(dataObjectLength).build();
                  IndexInputStream indexStream = index.toStream()) {
@@ -264,9 +271,10 @@ public class BlobStoreManagedLedgerOffloader implements LedgerOffloader {
                         .contentLength((long) indexStream.getStreamSize())
                         .build();
 
+                long startUploadTime = System.nanoTime();
                 writeBlobStore.putBlob(config.getBucket(), blob);
-                mbean.recordBuildJcloundIndexLatency(extraMetadata.get(MANAGED_LEDGER_NAME),
-                        (System.nanoTime() - startIndex), TimeUnit.NANOSECONDS);
+                mbean.recordWriteToStorageLatency(extraMetadata.get(MANAGED_LEDGER_NAME),
+                        System.nanoTime() - startUploadTime, TimeUnit.NANOSECONDS);
                 promise.complete(null);
             } catch (Throwable t) {
                 try {
@@ -275,7 +283,9 @@ public class BlobStoreManagedLedgerOffloader implements LedgerOffloader {
                     log.error("Failed deleteObject in bucket - {} with key - {}.",
                             config.getBucket(), dataBlockKey, throwable);
                 }
-                mbean.recordBuildJcloundIndexError(extraMetadata.get(MANAGED_LEDGER_NAME));
+
+                mbean.recordWriteToStorageError(extraMetadata.get(MANAGED_LEDGER_NAME));
+                mbean.recordOffloadError(extraMetadata.get(MANAGED_LEDGER_NAME));
                 promise.completeExceptionally(t);
                 return;
             }

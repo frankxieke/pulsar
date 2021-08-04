@@ -214,7 +214,10 @@ public class FileSystemManagedLedgerOffloader implements LedgerOffloader {
                 do {
                     long end = Math.min(needToOffloadFirstEntryNumber + ENTRIES_PER_READ - 1, readHandle.getLastAddConfirmed());
                     log.debug("read ledger entries. start: {}, end: {}", needToOffloadFirstEntryNumber, end);
+                    long startReadTime = System.nanoTime();
                     LedgerEntries ledgerEntriesOnce = readHandle.readAsync(needToOffloadFirstEntryNumber, end).get();
+                    mbean.recordReadLedgerLatency(extraMetadata.get(MANAGED_LEDGER_NAME),
+                            System.nanoTime() - startReadTime, TimeUnit.NANOSECONDS);
                     semaphore.acquire();
                     countDownLatch = new CountDownLatch(1);
                     assignmentScheduler.chooseThread(ledgerId).submit(FileSystemWriter.create(ledgerEntriesOnce, dataWriter, semaphore,
@@ -308,10 +311,10 @@ public class FileSystemManagedLedgerOffloader implements LedgerOffloader {
                         break;
                     }
                     haveOffloadEntryNumber.incrementAndGet();
-                    ledgerReader.mbean.recordWriteToStorageRate(managedLedgerName, entry.getEntryBytes().length);
+                    ledgerReader.mbean.recordOffloadRate(managedLedgerName, entry.getEntryBytes().length);
                 }
-                long writeEntryTimeInMs = System.nanoTime() - start;
-                ledgerReader.mbean.recordWriteToStorageLatency(managedLedgerName, writeEntryTimeInMs, TimeUnit.NANOSECONDS);
+                long writeEntryTimeInNs = System.nanoTime() - start;
+                ledgerReader.mbean.recordWriteToStorageLatency(managedLedgerName, writeEntryTimeInNs, TimeUnit.NANOSECONDS);
             }
             countDownLatch.countDown();
             ledgerEntriesOnce.close();

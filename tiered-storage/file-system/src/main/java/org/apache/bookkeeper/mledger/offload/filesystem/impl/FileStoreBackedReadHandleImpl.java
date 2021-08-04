@@ -67,7 +67,9 @@ public class FileStoreBackedReadHandleImpl implements ReadHandle {
         BytesWritable value = new BytesWritable();
         try {
             key.set(FileSystemManagedLedgerOffloader.METADATA_KEY_INDEX);
+            long startReadIndexTime = System.nanoTime();
             reader.get(key, value);
+            mbean.recordReadOffloadIndexLatency(managedLedgerName, System.nanoTime() - startReadIndexTime, TimeUnit.NANOSECONDS);
             this.ledgerMetadata = parseLedgerMetadata(ledgerId, value.copyBytes());
         } catch (IOException e) {
             log.error("Fail to read LedgerMetadata for ledgerId {}",
@@ -121,7 +123,9 @@ public class FileStoreBackedReadHandleImpl implements ReadHandle {
                 key.set(nextExpectedId - 1);
                 reader.seek(key);
                 while (entriesToRead > 0) {
+                    long startReadTime = System.nanoTime();
                     reader.next(key, value);
+                    mbean.recordReadOffloadDataLatency(managedLedgerName, System.nanoTime() - startReadTime, TimeUnit.NANOSECONDS);
                     int length = value.getLength();
                     long entryId = key.get();
                     if (entryId == nextExpectedId) {

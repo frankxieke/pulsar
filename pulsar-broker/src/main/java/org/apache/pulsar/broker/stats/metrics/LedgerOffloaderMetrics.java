@@ -34,7 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.atomic.LongAdder;
+
+
 
 public class LedgerOffloaderMetrics extends AbstractMetrics {
 
@@ -54,6 +55,15 @@ public class LedgerOffloaderMetrics extends AbstractMetrics {
 
     private static final Buckets WRITE_TO_STORAGE_BUCKETS =
             new Buckets("brk_ledgeroffloader_writeToStorageBuckets", WRITE_TO_STORAGE_BUCKETS_MS);
+
+    private static final Buckets READ_LEDGER_LATENCY_BUCKETS =
+            new Buckets("brk_ledgeroffloader_readLedgerLatencyBuckets", WRITE_TO_STORAGE_BUCKETS_MS);
+
+    private static final Buckets READ_OFFLOAD_INDEX_LATENCY_BUCKETS =
+            new Buckets("brk_readOffload_indexLatencyBuckets", WRITE_TO_STORAGE_BUCKETS_MS);
+
+    private static final Buckets READ_OFFLOAD_DATA_LATENCY_BUCKETS =
+            new Buckets("brk_readOffload_dataLatencyBuckets", WRITE_TO_STORAGE_BUCKETS_MS);
 
     public LedgerOffloaderMetrics(PulsarService pulsar, LedgerOffloader ledgerOffloader) {
         super(pulsar);
@@ -80,15 +90,19 @@ public class LedgerOffloaderMetrics extends AbstractMetrics {
         Set<String> managedLedgerNames = new HashSet<>();
         managedLedgerNames.addAll(mbean.getOffloadTimes().keySet());
         managedLedgerNames.addAll(mbean.getOffloadErrors().keySet());
+        managedLedgerNames.addAll(mbean.getOffloadRates().keySet());
 
+        managedLedgerNames.addAll(mbean.getReadLedgerLatencyBuckets().keySet());
+        managedLedgerNames.addAll(mbean.getWriteToStorageLatencyBuckets().keySet());
+        managedLedgerNames.addAll(mbean.getWriteToStorageErrors().keySet());
+
+        managedLedgerNames.addAll(mbean.getStreamingWriteToStorageErrors().keySet());
+        managedLedgerNames.addAll(mbean.getStreamingWriteToStorageRates().keySet());
+
+        managedLedgerNames.addAll(mbean.getReadOffloadIndexLatencyBuckets().keySet());
+        managedLedgerNames.addAll(mbean.getReadOffloadDataLatencyBuckets().keySet());
         managedLedgerNames.addAll(mbean.getReadOffloadRates().keySet());
         managedLedgerNames.addAll(mbean.getReadOffloadErrors().keySet());
-
-        managedLedgerNames.addAll(mbean.getWriteToStorageLatencyBuckets().keySet());
-        managedLedgerNames.addAll(mbean.getWriteToStorageRates().keySet());
-        managedLedgerNames.addAll(mbean.getWriteToStorageErrors().keySet());
-        managedLedgerNames.addAll(mbean.getBuildJcloundIndexLatency().keySet());
-        managedLedgerNames.addAll(mbean.getBuildJcloundIndexErrors().keySet());
 
 
         for (String managedLedgerName : managedLedgerNames) {
@@ -99,42 +113,56 @@ public class LedgerOffloaderMetrics extends AbstractMetrics {
 
             tempAggregatedMetricsMap.clear();
 
-            // offload time
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_offloadError",
-                    (double) mbean.getOffloadErrors().getOrDefault(managedLedgerName, new LongAdder()).longValue());
+                    (double) mbean.getOffloadErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_offloadTime",
-                    (double) mbean.getOffloadTimes().getOrDefault(managedLedgerName, new LongAdder()).longValue());
-            // offload : write to storage offload
-            StatsBuckets statsBuckets = mbean.getWriteToStorageLatencyBuckets().get(managedLedgerName);
+                    (double) mbean.getOffloadTimes().getOrDefault(managedLedgerName, new Rate()).getAverageValue());
+            populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_writeRate",
+                    mbean.getOffloadRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
+
+
+            StatsBuckets statsBuckets = mbean.getReadLedgerLatencyBuckets().get(managedLedgerName);
+            if (statsBuckets != null) {
+                READ_LEDGER_LATENCY_BUCKETS.populateBucketEntries(tempAggregatedMetricsMap,
+                        statsBuckets.getBuckets(),
+                        ledgerOffloader.getOffloadPolicies().getRefreshStatsInterval());
+            }
+
+            statsBuckets = mbean.getWriteToStorageLatencyBuckets().get(managedLedgerName);
             if (statsBuckets != null) {
                 WRITE_TO_STORAGE_BUCKETS.populateBucketEntries(tempAggregatedMetricsMap,
                         statsBuckets.getBuckets(),
                         ledgerOffloader.getOffloadPolicies().getRefreshStatsInterval());
             }
-            populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_writeRate",
-                    mbean.getWriteToStorageRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
+
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_writeError",
-                    (double) mbean.getWriteToStorageErrors().getOrDefault(managedLedgerName, new LongAdder()).longValue());
-            StatsBuckets buildIndexBuckets = mbean.getBuildJcloundIndexLatency().get(managedLedgerName);
-            if (buildIndexBuckets != null) {
-                WRITE_TO_STORAGE_BUCKETS.populateBucketEntries(tempAggregatedMetricsMap,
-                        buildIndexBuckets.getBuckets(),
+                    (double) mbean.getWriteToStorageErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
+
+            statsBuckets = mbean.getReadOffloadIndexLatencyBuckets().get(managedLedgerName);
+            if (statsBuckets != null) {
+                READ_OFFLOAD_INDEX_LATENCY_BUCKETS.populateBucketEntries(tempAggregatedMetricsMap,
+                        statsBuckets.getBuckets(),
                         ledgerOffloader.getOffloadPolicies().getRefreshStatsInterval());
             }
-            populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_buildIndexError",
-                    (double) mbean.getBuildJcloundIndexErrors().getOrDefault(managedLedgerName, new LongAdder()).longValue());
 
-            // readOffload
+            statsBuckets = mbean.getReadOffloadDataLatencyBuckets().get(managedLedgerName);
+            if (statsBuckets != null) {
+                READ_OFFLOAD_DATA_LATENCY_BUCKETS.populateBucketEntries(tempAggregatedMetricsMap,
+                        statsBuckets.getBuckets(),
+                        ledgerOffloader.getOffloadPolicies().getRefreshStatsInterval());
+            }
+
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_readOffloadError",
-                    (double) mbean.getReadOffloadErrors().getOrDefault(managedLedgerName, new LongAdder()).longValue());
+                    (double) mbean.getReadOffloadErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_readOffloadRate",
                     mbean.getReadOffloadRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
+
 
             // streaming offload
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_streamingWriteRate",
                     mbean.getStreamingWriteToStorageRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_streamingWriteError",
-                    (double) mbean.getStreamingWriteToStorageErrors().getOrDefault(managedLedgerName, new LongAdder()).longValue());
+                    (double) mbean.getStreamingWriteToStorageErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
 
             for (Entry<String, Double> ma : tempAggregatedMetricsMap.entrySet()) {
                 metrics.put(ma.getKey(), ma.getValue());

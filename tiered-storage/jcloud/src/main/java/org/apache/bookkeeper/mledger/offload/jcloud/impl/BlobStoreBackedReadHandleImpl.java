@@ -199,7 +199,9 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
                                   long ledgerId, int readBufferSize,
                                   LedgerOffloaderMXBeanImpl mbean, String managedLedgerName)
             throws IOException {
+        long readIndexStartTime = System.nanoTime();
         Blob blob = blobStore.getBlob(bucket, indexKey);
+
         versionCheck.check(indexKey, blob);
         OffloadIndexBlockBuilder indexBuilder = OffloadIndexBlockBuilder.create();
         OffloadIndexBlock index;
@@ -210,7 +212,8 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
         BackedInputStream inputStream = new BlobStoreBackedInputStreamImpl(blobStore, bucket, key,
                 versionCheck,
                 index.getDataObjectLength(),
-                readBufferSize);
+                readBufferSize,
+                mbean, managedLedgerName);
         return new BlobStoreBackedReadHandleImpl(ledgerId, index, inputStream, executor, mbean, managedLedgerName);
     }
 }

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.val;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.api.LastConfirmedAndEntry;
@@ -289,7 +290,9 @@ public class BlobStoreBackedReadHandleImplV2 implements ReadHandle {
             String indexKey = indexKeys.get(i);
             String key = keys.get(i);
             log.debug("open bucket: {} index key: {}", bucket, indexKey);
+            long startTime = System.nanoTime();
             Blob blob = blobStore.getBlob(bucket, indexKey);
+            mbean.recordReadOffloadIndexLatency(managedLedgerName, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
             log.debug("indexKey blob: {} {}", indexKey, blob);
             versionCheck.check(indexKey, blob);
             OffloadIndexBlockV2Builder indexBuilder = OffloadIndexBlockV2Builder.create();
@@ -301,7 +304,9 @@ public class BlobStoreBackedReadHandleImplV2 implements ReadHandle {
             BackedInputStream inputStream = new BlobStoreBackedInputStreamImpl(blobStore, bucket, key,
                     versionCheck,
                     index.getDataObjectLength(),
-                    readBufferSize);
+                    readBufferSize,
+                    mbean,
+                    managedLedgerName);
             inputStreams.add(inputStream);
             indice.add(index);
         }

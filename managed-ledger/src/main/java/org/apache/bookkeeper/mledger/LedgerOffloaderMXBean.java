@@ -18,6 +18,7 @@
  */
 package org.apache.bookkeeper.mledger;
 
+import java.util.concurrent.TimeUnit;
 import org.apache.bookkeeper.common.annotation.InterfaceAudience;
 import org.apache.bookkeeper.common.annotation.InterfaceStability;
 import org.apache.bookkeeper.mledger.util.StatsBuckets;
@@ -40,19 +41,44 @@ public interface LedgerOffloaderMXBean {
      */
     String getName();
 
+
+    /**
+     * refresh offloader stats.
+     *
+     * @return
+     */
+    void refreshStats();
+
+
+
     /**
      * Record the offload total time.
      *
      * @return
      */
-    Map<String, LongAdder> getOffloadTimes();
+    Map<String, Rate> getOffloadTimes();
 
     /**
      * Record the offload error count.
      *
      * @return
      */
-    Map<String, LongAdder> getOffloadErrors();
+    Map<String, Rate> getOffloadErrors();
+
+    /**
+     * Record the offload rate to storage.
+     *
+     * @return
+     */
+    Map<String, Rate> getOffloadRates();
+
+
+    /**
+     * Record the read ledger latency
+     *
+     * @return
+     */
+    Map<String, StatsBuckets> getReadLedgerLatencyBuckets();
 
     /**
      * Record the write latency to tiered storage.
@@ -62,30 +88,25 @@ public interface LedgerOffloaderMXBean {
     Map<String, StatsBuckets> getWriteToStorageLatencyBuckets();
 
     /**
-     * Record the write rate to storage.
-     *
-     * @return
-     */
-    Map<String, Rate> getWriteToStorageRates();
-
-    /**
      * Record the write to storage error count.
      *
      * @return
      */
-    Map<String, LongAdder> getWriteToStorageErrors();
+    Map<String, Rate> getWriteToStorageErrors();
 
     /**
-     * Record build the jclound index latency.
+     * Record read offload index latency
      *
      * @return
      */
-    Map<String, StatsBuckets> getBuildJcloundIndexLatency();
+    Map<String, StatsBuckets> getReadOffloadIndexLatencyBuckets();
 
     /**
+     * Record read offload data latency
+     *
      * @return
      */
-    Map<String, LongAdder> getBuildJcloundIndexErrors();
+    Map<String, StatsBuckets> getReadOffloadDataLatencyBuckets();
 
     /**
      * Record read offload method rate.
@@ -97,9 +118,9 @@ public interface LedgerOffloaderMXBean {
     /**
      * Record read offload error count.
      *
-     * @return
+     * @return[
      */
-    Map<String, LongAdder> getReadOffloadErrors();
+    Map<String, Rate> getReadOffloadErrors();
 
     /**
      * Record streaming read offload method rate.
@@ -113,6 +134,6 @@ public interface LedgerOffloaderMXBean {
      *
      * @return
      */
-    Map<String, LongAdder> getStreamingWriteToStorageErrors();
+    Map<String, Rate> getStreamingWriteToStorageErrors();
 
 }
