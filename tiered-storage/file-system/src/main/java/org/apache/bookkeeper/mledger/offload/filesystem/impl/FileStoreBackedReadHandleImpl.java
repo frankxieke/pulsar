@@ -28,7 +28,6 @@ import org.apache.bookkeeper.client.api.LedgerMetadata;
 import org.apache.bookkeeper.client.api.ReadHandle;
 import org.apache.bookkeeper.client.impl.LedgerEntriesImpl;
 import org.apache.bookkeeper.client.impl.LedgerEntryImpl;
-
 import org.apache.bookkeeper.mledger.impl.LedgerOffloaderMXBeanImpl;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.LongWritable;
@@ -57,7 +56,8 @@ public class FileStoreBackedReadHandleImpl implements ReadHandle {
     private final String managedLedgerName;
 
     private FileStoreBackedReadHandleImpl(ExecutorService executor, MapFile.Reader reader, long ledgerId,
-                                          LedgerOffloaderMXBeanImpl mbean, String managedLedgerName) throws IOException {
+                                          LedgerOffloaderMXBeanImpl mbean,
+                                          String managedLedgerName) throws IOException {
         this.ledgerId = ledgerId;
         this.executor = executor;
         this.reader = reader;
@@ -69,7 +69,8 @@ public class FileStoreBackedReadHandleImpl implements ReadHandle {
             key.set(FileSystemManagedLedgerOffloader.METADATA_KEY_INDEX);
             long startReadIndexTime = System.nanoTime();
             reader.get(key, value);
-            mbean.recordReadOffloadIndexLatency(managedLedgerName, System.nanoTime() - startReadIndexTime, TimeUnit.NANOSECONDS);
+            mbean.recordReadOffloadIndexLatency(managedLedgerName,
+                    System.nanoTime() - startReadIndexTime, TimeUnit.NANOSECONDS);
             this.ledgerMetadata = parseLedgerMetadata(ledgerId, value.copyBytes());
         } catch (IOException e) {
             log.error("Fail to read LedgerMetadata for ledgerId {}",
@@ -125,7 +126,8 @@ public class FileStoreBackedReadHandleImpl implements ReadHandle {
                 while (entriesToRead > 0) {
                     long startReadTime = System.nanoTime();
                     reader.next(key, value);
-                    mbean.recordReadOffloadDataLatency(managedLedgerName, System.nanoTime() - startReadTime, TimeUnit.NANOSECONDS);
+                    mbean.recordReadOffloadDataLatency(managedLedgerName,
+                            System.nanoTime() - startReadTime, TimeUnit.NANOSECONDS);
                     int length = value.getLength();
                     long entryId = key.get();
                     if (entryId == nextExpectedId) {

@@ -20,6 +20,11 @@ package org.apache.pulsar.broker.stats.metrics;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import org.apache.bookkeeper.mledger.LedgerOffloader;
 import org.apache.bookkeeper.mledger.LedgerOffloaderMXBean;
 import org.apache.bookkeeper.mledger.impl.LedgerOffloaderMXBeanImpl;
@@ -29,20 +34,13 @@ import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.stats.Metrics;
 import org.apache.pulsar.common.stats.Rate;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-
-
 
 public class LedgerOffloaderMetrics extends AbstractMetrics {
 
-    private Map<String, Double> tempAggregatedMetricsMap;
-    private List<Metrics> metricsCollection;
-    private LedgerOffloader ledgerOffloader;
-    private LedgerOffloaderMXBean mbean;
+    private final Map<String, Double> tempAggregatedMetricsMap;
+    private final List<Metrics> metricsCollection;
+    private final LedgerOffloader ledgerOffloader;
+    private final LedgerOffloaderMXBean mbean;
 
     protected static final double[] WRITE_TO_STORAGE_BUCKETS_MS =
             new double[LedgerOffloaderMXBeanImpl.READ_ENTRY_LATENCY_BUCKETS_USEC.length];
@@ -116,7 +114,7 @@ public class LedgerOffloaderMetrics extends AbstractMetrics {
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_offloadError",
                     (double) mbean.getOffloadErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_offloadTime",
-                    (double) mbean.getOffloadTimes().getOrDefault(managedLedgerName, new Rate()).getAverageValue());
+                    mbean.getOffloadTimes().getOrDefault(managedLedgerName, new Rate()).getAverageValue());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_writeRate",
                     mbean.getOffloadRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
 
@@ -162,7 +160,8 @@ public class LedgerOffloaderMetrics extends AbstractMetrics {
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_streamingWriteRate",
                     mbean.getStreamingWriteToStorageRates().getOrDefault(managedLedgerName, new Rate()).getValueRate());
             populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ledgeroffloader_streamingWriteError",
-                    (double) mbean.getStreamingWriteToStorageErrors().getOrDefault(managedLedgerName, new Rate()).getCount());
+                    (double) mbean.getStreamingWriteToStorageErrors().
+                            getOrDefault(managedLedgerName, new Rate()).getCount());
 
             for (Entry<String, Double> ma : tempAggregatedMetricsMap.entrySet()) {
                 metrics.put(ma.getKey(), ma.getValue());

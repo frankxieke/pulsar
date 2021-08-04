@@ -26,10 +26,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.apache.bookkeeper.mledger.LedgerOffloaderMXBean;
+import static org.apache.bookkeeper.mledger.util.SafeRun.safeRun;
 import org.apache.bookkeeper.mledger.util.StatsBuckets;
 import org.apache.pulsar.common.stats.Rate;
-import static org.apache.bookkeeper.mledger.util.SafeRun.safeRun;
-
 
 public class LedgerOffloaderMXBeanImpl implements LedgerOffloaderMXBean {
 
@@ -61,6 +60,7 @@ public class LedgerOffloaderMXBeanImpl implements LedgerOffloaderMXBean {
     private final ConcurrentHashMap<String, Rate> streamingWriteToStorageRateMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Rate> streamingWriteToStorageErrorMap = new ConcurrentHashMap<>();
 
+    // readOffloadIndexLatencyBucketsMap and readOffloadDataLatencyBucketsMap are latency metrics about index and data
     // readOffloadDataRateMap and readOffloadErrorMap is for reading offloaded data
     private final ConcurrentHashMap<String, StatsBuckets> readOffloadIndexLatencyBucketsMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, StatsBuckets> readOffloadDataLatencyBucketsMap = new ConcurrentHashMap<>();

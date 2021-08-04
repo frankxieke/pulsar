@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.api.LastConfirmedAndEntry;
 import org.apache.bookkeeper.client.api.LedgerEntries;
@@ -201,7 +202,8 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
             throws IOException {
         long readIndexStartTime = System.nanoTime();
         Blob blob = blobStore.getBlob(bucket, indexKey);
-
+        mbean.recordReadOffloadIndexLatency(managedLedgerName,
+                System.nanoTime() - readIndexStartTime, TimeUnit.NANOSECONDS);
         versionCheck.check(indexKey, blob);
         OffloadIndexBlockBuilder indexBuilder = OffloadIndexBlockBuilder.create();
         OffloadIndexBlock index;
