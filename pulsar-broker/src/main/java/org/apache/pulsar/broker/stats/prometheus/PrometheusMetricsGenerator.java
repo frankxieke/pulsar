@@ -39,10 +39,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.stats.NullStatsProvider;
 import org.apache.bookkeeper.stats.StatsProvider;
 import org.apache.pulsar.PulsarVersion;
 import org.apache.pulsar.broker.PulsarService;
+import org.apache.pulsar.broker.service.persistent.PersistentTopic;
+import org.apache.pulsar.broker.stats.metrics.LedgerOffloaderMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedCursorMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerCacheMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerMetrics;
@@ -54,6 +57,7 @@ import org.apache.pulsar.common.util.SimpleTextOutputStream;
  * in a text format suitable to be consumed by Prometheus.
  * Format specification can be found at {@link https://prometheus.io/docs/instrumenting/exposition_formats/}
  */
+@Slf4j
 public class PrometheusMetricsGenerator {
 
     static {
@@ -114,6 +118,10 @@ public class PrometheusMetricsGenerator {
 
             generateManagedLedgerBookieClientMetrics(pulsar, stream);
 
+            if (pulsar.getConfiguration().isExposeManagedLedgerMetricsInPrometheus()) {
+                generateLedgerOffloaderMetrics(pulsar, stream, includeTopicMetrics);
+            }
+
             if (metricsProviders != null) {
                 for (PrometheusRawMetricsProvider metricsProvider : metricsProviders) {
                     metricsProvider.generate(stream);
@@ -124,6 +132,45 @@ public class PrometheusMetricsGenerator {
             buf.release();
         }
     }
+
+    private static void generateLedgerOffloaderMetrics(PulsarService pulsar, SimpleTextOutputStream stream,
+                                                       boolean includeTopicMetrics) {
+        if (includeTopicMetrics) {
+            pulsar.getBrokerService().getMultiLayerTopicMap().forEach((namespace, bundlesMap) -> {
+                bundlesMap.forEach((bundle, topicsMap) -> {
+                    topicsMap.forEach((topicName, topic) -> {
+                        if (topic instanceof PersistentTopic) {
+                            try {
+                                String clusterName = pulsar.getConfiguration().getClusterName();
+                                List<Metrics> metrics =
+                                        new LedgerOffloaderMetrics(pulsar, true, namespace, topicName).generate();
+                                log.debug("topic:" + topic
+                                        + " generate ledger offloader topic level metrics succeed, size:"
+                                        + metrics.size());
+                                parseMetricsToPrometheusMetrics(metrics, clusterName, Collector.Type.GAUGE, stream);
+                            } catch (Exception ex) {
+                                log.error("generate ledger offloader topic level metrics error", ex);
+                            }
+                        }
+                    });
+                });
+            });
+        } else {
+            pulsar.getBrokerService().getMultiLayerTopicMap().forEach((namespace, bundlesMap) -> {
+                try {
+                    String clusterName = pulsar.getConfiguration().getClusterName();
+                    List<Metrics> metrics =
+                            new LedgerOffloaderMetrics(pulsar, false, namespace, "").generate();
+                    log.debug("namespace:" + namespace
+                            + " generate ledger offloader namespace level metrics succeed, size:" + metrics.size());
+                    parseMetricsToPrometheusMetrics(metrics, clusterName, Collector.Type.GAUGE, stream);
+                } catch (Exception ex) {
+                    log.error("generate ledger offloader namespace level metrics error", ex);
+                }
+            });
+        }
+    }
+
 
     private static void generateBrokerBasicMetrics(PulsarService pulsar, SimpleTextOutputStream stream) {
         String clusterName = pulsar.getConfiguration().getClusterName();
@@ -180,8 +227,6 @@ public class PrometheusMetricsGenerator {
                         continue;
                     }
                 } else {
-
-
                     String name = entry.getKey();
                     if (!names.contains(name)) {
                         stream.write("# TYPE ").write(entry.getKey().replace("brk_", "pulsar_")).write(' ')
