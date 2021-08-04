@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.api.LastConfirmedAndEntry;
 import org.apache.bookkeeper.client.api.LedgerEntries;
@@ -35,6 +36,7 @@ import org.apache.bookkeeper.client.api.LedgerMetadata;
 import org.apache.bookkeeper.client.api.ReadHandle;
 import org.apache.bookkeeper.client.impl.LedgerEntriesImpl;
 import org.apache.bookkeeper.client.impl.LedgerEntryImpl;
+import org.apache.bookkeeper.mledger.impl.LedgerOffloaderMXBeanImpl;
 import org.apache.bookkeeper.mledger.offload.jcloud.BackedInputStream;
 import org.apache.bookkeeper.mledger.offload.jcloud.OffloadIndexBlock;
 import org.apache.bookkeeper.mledger.offload.jcloud.OffloadIndexBlockBuilder;
@@ -53,15 +55,19 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
     private final BackedInputStream inputStream;
     private final DataInputStream dataStream;
     private final ExecutorService executor;
+    private final LedgerOffloaderMXBeanImpl mbean;
+    private final String managedLedgerName;
 
     private BlobStoreBackedReadHandleImpl(long ledgerId, OffloadIndexBlock index,
-                                          BackedInputStream inputStream,
-                                          ExecutorService executor) {
+                                          BackedInputStream inputStream, ExecutorService executor,
+                                          LedgerOffloaderMXBeanImpl mbean, String managedLedgerName) {
         this.ledgerId = ledgerId;
         this.index = index;
         this.inputStream = inputStream;
         this.dataStream = new DataInputStream(inputStream);
         this.executor = executor;
+        this.mbean = mbean;
+        this.managedLedgerName = managedLedgerName;
     }
 
     @Override
@@ -121,6 +127,7 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
                             }
                             entriesToRead--;
                             nextExpectedId++;
+                            mbean.recordReadOffloadRate(managedLedgerName, length);
                         } else if (entryId > nextExpectedId) {
                             inputStream.seek(index.getIndexEntryForEntry(nextExpectedId).getDataOffset());
                             continue;
@@ -140,6 +147,7 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
 
                     promise.complete(LedgerEntriesImpl.create(entries));
                 } catch (Throwable t) {
+                    mbean.recordReadOffloadError(managedLedgerName);
                     promise.completeExceptionally(t);
                     entries.forEach(LedgerEntry::close);
                 }
@@ -189,9 +197,13 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
     public static ReadHandle open(ScheduledExecutorService executor,
                                   BlobStore blobStore, String bucket, String key, String indexKey,
                                   VersionCheck versionCheck,
-                                  long ledgerId, int readBufferSize)
+                                  long ledgerId, int readBufferSize,
+                                  LedgerOffloaderMXBeanImpl mbean, String managedLedgerName)
             throws IOException {
+        long readIndexStartTime = System.nanoTime();
         Blob blob = blobStore.getBlob(bucket, indexKey);
+        mbean.recordReadOffloadIndexLatency(managedLedgerName,
+                System.nanoTime() - readIndexStartTime, TimeUnit.NANOSECONDS);
         versionCheck.check(indexKey, blob);
         OffloadIndexBlockBuilder indexBuilder = OffloadIndexBlockBuilder.create();
         OffloadIndexBlock index;
@@ -202,7 +214,8 @@ public class BlobStoreBackedReadHandleImpl implements ReadHandle {
         BackedInputStream inputStream = new BlobStoreBackedInputStreamImpl(blobStore, bucket, key,
                 versionCheck,
                 index.getDataObjectLength(),
-                readBufferSize);
-        return new BlobStoreBackedReadHandleImpl(ledgerId, index, inputStream, executor);
+                readBufferSize,
+                mbean, managedLedgerName);
+        return new BlobStoreBackedReadHandleImpl(ledgerId, index, inputStream, executor, mbean, managedLedgerName);
     }
 }
