@@ -26,6 +26,7 @@ import io.netty.buffer.ByteBuf;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -113,17 +114,22 @@ public class BKStateStoreProviderImpl implements StateStoreProvider {
                 .setStorageType(StorageType.TABLE)
                 .build();
             Stopwatch elapsedWatch = Stopwatch.createStarted();
+            log.info("begin create namespace and table {} {} ", tableNs, tableName);
 
             Exception lastException = null;
             while (elapsedWatch.elapsed(TimeUnit.MINUTES) < 1) {
                 try {
                     result(storageAdminClient.getStream(tableNs, tableName));
+                    log.info("begin create namespace and table1 finished {} {} ", tableNs, tableName);
                     return;
                 } catch (NamespaceNotFoundException nnfe) {
                     try {
+                        log.info("begin create namespace and table2-1 finished {} {} ", tableNs, tableName);
                         result(storageAdminClient.createNamespace(tableNs, NamespaceConfiguration.newBuilder()
                                 .setDefaultStreamConf(streamConf)
                                 .build()));
+                        log.info("begin create namespace and table2 finished {} {} ", tableNs, tableName);
+
                     } catch (Exception e) {
                         // there might be two clients conflicting at creating table, so let's retrieve the table again
                         // to make sure the table is created.
@@ -131,7 +137,10 @@ public class BKStateStoreProviderImpl implements StateStoreProvider {
                         log.warn("Encountered exception when creating namespace {} for state table", tableName, e);
                     }
                     try {
+                        log.info("begin create namespace and table3-1 finished {} {} ", tableNs, tableName);
+
                         result(storageAdminClient.createStream(tableNs, tableName, streamConf));
+                        log.info("begin create namespace and table3 finished {} {} ", tableNs, tableName);
                     } catch (Exception e) {
                         // there might be two clients conflicting at creating table, so let's retrieve the table again
                         // to make sure the table is created.
@@ -140,7 +149,9 @@ public class BKStateStoreProviderImpl implements StateStoreProvider {
                     }
                 } catch (StreamNotFoundException snfe) {
                     try {
+                        log.info("begin create namespace and table4-1 finished {} {} ", tableNs, tableName);
                         result(storageAdminClient.createStream(tableNs, tableName, streamConf));
+                        log.info("begin create namespace and table4 finished {} {} ", tableNs, tableName);
                     } catch (Exception e) {
                         // there might be two client conflicting at creating table, so let's retrieve it to make
                         // sure the table is created.
@@ -168,7 +179,9 @@ public class BKStateStoreProviderImpl implements StateStoreProvider {
         Stopwatch openSw = Stopwatch.createStarted();
         while (openSw.elapsed(TimeUnit.MINUTES) < 1) {
             try {
-                return result(client.openTable(name), 1, TimeUnit.MINUTES);
+                CompletableFuture<Table<ByteBuf, ByteBuf>> f = client.openTable(name);
+                log.info("open talbe succeed for {} {} {} ", name, tenant, namespace);
+                return result(f, 1, TimeUnit.MINUTES);
             } catch (InternalServerException ise) {
                 log.warn("Encountered internal server on opening state table '{}/{}/{}', re-attempt in 100 milliseconds : {}",
                     tenant, namespace, name, ise.getMessage());

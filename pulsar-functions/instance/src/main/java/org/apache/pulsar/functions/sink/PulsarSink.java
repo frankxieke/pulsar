@@ -311,7 +311,7 @@ public class PulsarSink<T> implements Sink<T> {
             if (!record.getRecordSequence().isPresent()) {
                 throw new RuntimeException("RecordSequence needs to be specified for every record while in Effectively-once mode");
             }
-
+            log.info("sendOutMessage {} to pulsar", record.getRecordSequence());
             // assign sequence id to output message for idempotent producing
             msg.sequenceId(record.getRecordSequence().get());
             CompletableFuture<MessageId> future = msg.sendAsync();

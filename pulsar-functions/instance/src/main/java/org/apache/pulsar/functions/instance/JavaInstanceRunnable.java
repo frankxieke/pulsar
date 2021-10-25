@@ -217,8 +217,10 @@ public class JavaInstanceRunnable implements AutoCloseable, Runnable {
             throw new RuntimeException("User class must either be Function or java.util.Function");
         }
 
+        log.info("begin to setup store");
         // start the state table
         setupStateStore();
+        log.info("end to setup store succeed");
 
         ContextImpl contextImpl = setupContext();
 
@@ -325,13 +327,18 @@ public class JavaInstanceRunnable implements AutoCloseable, Runnable {
             stateStoreProvider = new BKStateStoreProviderImpl();
             Map<String, Object> stateStoreProviderConfig = new HashMap();
             stateStoreProviderConfig.put(BKStateStoreProviderImpl.STATE_STORAGE_SERVICE_URL, stateStorageServiceUrl);
+            log.info("configMap: {}", stateStoreProviderConfig);
             stateStoreProvider.init(stateStoreProviderConfig, instanceConfig.getFunctionDetails());
+            log.info("stateStoreProvider init finished: {}", stateStoreProviderConfig);
+
 
             StateStore store = stateStoreProvider.getStateStore(
                 instanceConfig.getFunctionDetails().getTenant(),
                 instanceConfig.getFunctionDetails().getNamespace(),
                 instanceConfig.getFunctionDetails().getName()
             );
+            log.info("endGetStateStore  finished: {}", instanceConfig.getFunctionDetails());
+
             StateStoreContext context = new StateStoreContextImpl();
             store.init(context);
 

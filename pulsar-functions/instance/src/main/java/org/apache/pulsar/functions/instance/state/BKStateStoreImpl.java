@@ -25,11 +25,14 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.util.ReferenceCountUtil;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.api.kv.Table;
 import org.apache.bookkeeper.api.kv.options.Options;
 import org.apache.pulsar.functions.api.StateStoreContext;
 import org.apache.pulsar.functions.utils.FunctionCommon;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class accumulates the state updates from one function.
@@ -43,6 +46,8 @@ public class BKStateStoreImpl implements DefaultStateStore {
     private final String name;
     private final String fqsn;
     private final Table<ByteBuf, ByteBuf> table;
+    private static final Logger log = LoggerFactory.getLogger(BKStateStoreImpl.class);
+
 
     public BKStateStoreImpl(String tenant, String namespace, String name,
                             Table<ByteBuf, ByteBuf> table) {
@@ -120,9 +125,12 @@ public class BKStateStoreImpl implements DefaultStateStore {
             // If a user used an operation like ByteBuffer.allocate(4).putInt(count) to create a ByteBuffer to store to the state store
             // the position of the buffer will be at the end and nothing will be written to table service
             value.position(0);
-            return table.put(
+            log.info("put async {} {} table {}", key, new String(value.array(), Charset.defaultCharset()), table);
+            CompletableFuture<Void> t =  table.put(
                     Unpooled.wrappedBuffer(key.getBytes(UTF_8)),
                     Unpooled.wrappedBuffer(value));
+            log.info("put async succeed {}", t);
+            return t;
         } else {
             return table.put(
                     Unpooled.wrappedBuffer(key.getBytes(UTF_8)),
@@ -135,6 +143,7 @@ public class BKStateStoreImpl implements DefaultStateStore {
         try {
             result(putAsync(key, value));
         } catch (Exception e) {
+            log.error("putState {} {}", key, value, e);
             throw new RuntimeException("Failed to update the state value for key '" + key + "'");
         }
     }
